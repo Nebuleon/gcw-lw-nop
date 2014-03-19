@@ -1,0 +1,286 @@
+Some explanation is in order.
+
+This was done on a JZ4770 by Ingenic, where reading a register being loaded from memory by LB, LBU, LH, LHU or LW causes a certain amount of delay.
+
+The program is based on a loop that runs 4.294 billion times. At the core of the loop is the following code:
+  LW    $11, 0($12)
+  <A variable amount of NOPs>
+  ADDU  $10, $10, $11
+which basically means "load the next word from memory into $11 from the address contained in $12; fill the pipeline with NOPs; add what was just read into $11 with the current contents of $10". The ADDU needs the data that was just read. Therefore, until it's loaded, executing that particular instruction will cause the processor to wait. But executing the NOPs in the middle will not wait, as they don't require data from $11.
+
+The first parameter controls how many NOPs I insert between the LW and the ADDU. With the second parameter equal to 1, at 4 NOPs I finally get a longer runtime. That means the operation can be carried out 4 *cycles* away.
+
+The second parameter controls how large the data is that we're reading. Its unit is cache lines, so 1 = 32 bytes. This makes it so that the effect of sequential reads among the same cache line is negated, but if the hardware prefetches the next cache line after a read, the results are falsified. (This is not the case on Ingenic processors.)
+
+Before the test, pages are filled with a distinct pattern that should prevent the kernel from reusing its single zero page, and should also prevent duplicate page removers in VMs from operating.
+
+The first value, 384, is made to use about 3/4 of the level 1 data cache (12288 bytes), leaving some for the execution of kernel code such as interrupt handlers without falsifying our results.
+
+The second value, 6144, is made to escape the level 1 data cache and use about 3/4 of the level 2 data cache (196608 bytes).
+
+The third value, 65536, is made to pessimise the use of the data caches so that most of the reads are out of them (2097152 bytes), thus in RAM.
+
+All loops fit in the level 1 instruction cache, with only 2 conditional branches and 1 unconditional branch, which fit in the branch predictor.
+
+Together, these tests gather timings that should be quite accurate for the level 1 data cache, the level 2 data cache, and memory.
+
+-- RAW RESULTS --
+
+root@opendingux /media/data/local/home# time ./lwnop.elf 1 384
+real    0m 43.55s
+user    0m 43.54s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 2 384
+real    0m 43.53s
+user    0m 43.52s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 3 384
+real    0m 43.53s
+user    0m 43.50s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 4 384
+real    0m 47.90s
+user    0m 47.88s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 1 6144
+real    2m 41.70s
+user    2m 41.65s
+sys     0m 0.01s
+root@opendingux /media/data/local/home# time ./lwnop.elf 2 6144
+real    2m 54.54s
+user    2m 54.48s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 3 6144
+real    2m 44.46s
+user    2m 44.40s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 4 6144
+real    2m 42.18s
+user    2m 42.13s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 5 6144
+real    3m 7.46s
+user    3m 7.40s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 6 6144
+real    3m 12.38s
+user    3m 12.32s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 7 6144
+real    3m 12.39s
+user    3m 12.34s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 8 6144
+real    3m 12.78s
+user    3m 12.71s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 9 6144
+real    3m 9.59s
+user    3m 9.51s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 10 6144
+real    3m 7.08s
+user    3m 7.02s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 11 6144
+real    3m 6.84s
+user    3m 6.76s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 12 6144
+real    3m 20.16s
+user    3m 20.10s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 13 6144
+real    3m 20.15s
+user    3m 20.10s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 14 6144
+real    3m 20.31s
+user    3m 20.22s
+sys     0m 0.01s
+root@opendingux /media/data/local/home# time ./lwnop.elf 15 6144
+real    3m 34.05s
+user    3m 33.99s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 16 6144
+real    4m 10.03s
+user    4m 9.94s
+sys     0m 0.00s
+root@opendingux /media/data/local/home# time ./lwnop.elf 1 262144
+real    4m 16.71s
+user    4m 16.60s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 2 262144
+real    4m 15.85s
+user    4m 15.74s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 3 262144
+real    4m 16.69s
+user    4m 16.58s
+sys     0m 0.02s
+root@opendingux /media/data/local/home# time ./lwnop.elf 4 262144
+real    4m 16.25s
+user    4m 16.13s
+sys     0m 0.02s
+root@opendingux /media/data/local/home# time ./lwnop.elf 5 262144
+real    4m 16.21s
+user    4m 16.09s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 6 262144
+real    4m 36.19s
+user    4m 36.06s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 7 262144
+real    4m 36.00s
+user    4m 35.88s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 8 262144
+real    4m 35.98s
+user    4m 35.86s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 9 262144
+real    4m 40.05s
+user    4m 39.95s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 10 262144
+real    4m 40.80s
+user    4m 40.67s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 11 262144
+real    4m 40.87s
+user    4m 40.76s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 12 262144
+real    4m 46.74s
+user    4m 46.62s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 13 262144
+real    4m 46.89s
+user    4m 46.78s
+sys     0m 0.02s
+root@opendingux /media/data/local/home# time ./lwnop.elf 14 262144
+real    4m 46.60s
+user    4m 46.48s
+sys     0m 0.02s
+root@opendingux /media/data/local/home# time ./lwnop.elf 15 262144
+real    5m 1.31s
+user    5m 1.20s
+sys     0m 0.02s
+root@opendingux /media/data/local/home# time ./lwnop.elf 16 262144
+real    5m 1.63s
+user    5m 1.52s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 17 262144
+real    5m 1.27s
+user    5m 1.15s
+sys     0m 0.02s
+root@opendingux /media/data/local/home# time ./lwnop.elf 18 262144
+real    5m 23.07s
+user    5m 22.95s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 19 262144
+real    5m 21.76s
+user    5m 21.64s
+sys     0m 0.02s
+root@opendingux /media/data/local/home# time ./lwnop.elf 20 262144
+real    5m 23.29s
+user    5m 23.17s
+sys     0m 0.02s
+root@opendingux /media/data/local/home# time ./lwnop.elf 21 262144
+real    5m 25.89s
+user    5m 25.76s
+sys     0m 0.02s
+root@opendingux /media/data/local/home# time ./lwnop.elf 22 262144
+real    5m 26.62s
+user    5m 26.48s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 23 262144
+real    5m 27.08s
+user    5m 26.95s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 24 262144
+real    5m 37.99s
+user    5m 37.84s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 25 262144
+real    5m 38.00s
+user    5m 37.85s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 26 262144
+real    5m 38.07s
+user    5m 37.93s
+sys     0m 0.02s
+root@opendingux /media/data/local/home# time ./lwnop.elf 27 262144
+real    5m 50.52s
+user    5m 50.39s
+sys     0m 0.02s
+root@opendingux /media/data/local/home# time ./lwnop.elf 28 262144
+real    5m 50.56s
+user    5m 50.43s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 29 262144
+real    5m 50.03s
+user    5m 49.92s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 30 262144
+real    5m 56.70s
+user    5m 56.56s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 31 262144
+real    5m 56.67s
+user    5m 56.52s
+sys     0m 0.03s
+root@opendingux /media/data/local/home# time ./lwnop.elf 32 262144
+real    5m 57.32s
+user    5m 57.19s
+sys     0m 0.02s
+
+-- INTERPRETATION OF RESULTS, LEVEL 1 DATA CACHE --
+
+The level 1 data cache is a uniform cache wired to produce all results in up to 4 cycles. To simplify the design of the circuits, the processor waits for 4 cycles before the result of any load is available for further processing by instructions.
+
+Adding NOPs when reading the level 1 data cache results in this:
+
+0: [LW]  [wait | wait | wait | ADDU]
+1: [LW]  [NOP]  [wait | wait | ADDU]
+2: [LW]  [NOP]  [NOP]  [wait | ADDU]
+3: [LW]  [NOP]  [NOP]  [NOP]  [ADDU]
+4: [LW]  [NOP]  [NOP]  [NOP]  [NOP]  [ADDU]
+
+Adding the 4th NOP results in 4.37 seconds of added runtime, which is about equivalent to 1 cycle per iteration at 996 MHz. From there, we can derive our LW-ADDU cycles per iteration as being 5: 1 for the LW, 3 for the load interlock when filled by NOPs, and 1 for the ADDU. The rest, minus some negligible constant time for setting up, is spent in loop overhead, including branches.
+
+The runtime was 43.53 seconds. Each cycle per iteration is 4.37 seconds in total.
+
+  43.53 - 5 * 4.37 = 21.68 seconds
+
+The loop overhead was half of the runtime. Therefore the loop overhead was also 5 cycles per iteration. This loop overhead is constant for lower levels of the memory hierarchy.
+
+-- INTERPRETATION OF RESULTS, LEVEL 2 DATA CACHE --
+
+The level 2 data cache is a non-uniform cache wired to produce results in varying amounts of cycles, possibly promoting some lines to the level 1 data cache as part of its operation. The time it takes this cache on average for retrieving data when 1 NOP is inserted is:
+
+  (162.78 - 21.68 seconds) / 4.37 seconds/cycle = 32.28 cycles
+
+With 6 to 11 NOPs inserted:
+
+  (189.59 - 21.68 seconds) / 4.37 seconds/cycle = 38.42 cycles
+
+So it's possible that the cache checks whether the data being sought was read into a register every few cycles, In that case, inserting 6 NOPs made a plateau that filtered reads that were carried out before 6 cycles of wait (8 cycles in total). Inserting 7 to 11 NOPs continued the plateau, meaning that no reads were carried out between that range of cycles of wait.
+
+With further analysis, one could derive the percentage of reads that were carried out in under 6 cycles of wait, under 11 cycles of wait, under 14 cycles of wait and so on. The average being 32.28 cycles, some reads could be carried out in as much as 60 cycles.
+
+-- INTERPRETATION OF RESULTS, MAIN MEMORY --
+
+The main memory is the last level of the memory hierarchy, servicing any reads that cannot be carried out from a cache. The time it takes main memory on average for retrieving data when 1 NOP is inserted is:
+
+  (256.71 - 21.68 seconds) / 4.37 seconds/cycle = 53.78 cycles
+
+With further analysis, one could derive the percentage of reads that were carried out in under 5, 8, 11, 13, 17 and 23 cycles of wait, and so on. The average being 53.78 cycles, some reads could be carried out in as much as 101 cycles.
+
+-- PROCESSED RESULTS --
+
+Data source          LW-ADDU, cycles   Loop overhead, cycles   Throughput, MiB/s
+                      min avg max
+Level 1 data cache      4   4   4              5                     996
+Level 2 data cache      6  32  60              5                     124
+Main memory             5  58 101              5                      17

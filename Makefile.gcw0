@@ -1,0 +1,6 @@
+CC := mipsel-linux-gcc
+AS := mipsel-linux-gcc
+CFLAGS := -O3
+
+lwnop.elf: nopfuncs.o bench-xburst-load-delay.o
+	$(CC) -o lwnop.elf nopfuncs.o bench-xburst-load-delay.o
