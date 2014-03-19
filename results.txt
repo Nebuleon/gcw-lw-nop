@@ -283,4 +283,4 @@ Data source          LW-ADDU, cycles   Loop overhead, cycles   Throughput, MiB/s
                       min avg max
 Level 1 data cache      4   4   4              5                     996
 Level 2 data cache      6  32  60              5                     124
-Main memory             5  58 101              5                      17
+Main memory             5  58 101              5                      68
